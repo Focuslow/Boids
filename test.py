@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal, QRect
-from PyQt5.QtGui import QPainter, QColor, QKeyEvent, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QPainter, QColor, QKeyEvent
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout
 
 import random
 
@@ -166,7 +166,6 @@ class MainWindow(QWidget):
 
     def keyPressEvent(self, event):
         if type(event) == QKeyEvent:
-            if event.key() == Qt.Key_Escape:
                 sys.exit(0)
 
 if __name__ == '__main__':
