@@ -5,23 +5,32 @@ from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
 import random
 
 class Boid:
-    def __init__(self, x, y, radius, color):
+    def __init__(self, grid, x, y, radius, color):
         self.x = x
         self.y = y
-        self.pos = [self.x, self,y]
         self.radius = radius
         self.color = color
-        self.dy = random.choice([-0.5,0.5])
-        self.dx = random.choice([-0.5,0.5])
-        self.vel = [self.dx, self.dy]
+        self.maxspeed = 1
+        self.dy = random.choice([-self.maxspeed,self.maxspeed])
+        self.dx = random.choice([-self.maxspeed,self.maxspeed])
         self.screen = QApplication.primaryScreen().availableGeometry()
+        self.grid = grid
+        self.grid_pos = grid.get_cell(self.x,self.y)
+        self.grid.add(self,self.grid_pos)
 
-    def move(self,flock):
-        self.separation(flock)
+    def move(self):
+        neighbors = self.grid.get_local_neighborhood(self,self.grid_pos)
+        self.get_nearby(neighbors)
+        self.separation()
         self.bound_move()
-
+        self.speedlimit()
         self.y += self.dy
         self.x += self.dx
+        new_cell = self.grid.get_cell(self.x, self.y)
+        if self.grid_pos != new_cell:
+            self.grid.remove(self,self.grid_pos)
+            self.grid_pos = new_cell
+            self.grid.add(self, self.grid_pos)
 
     def bound_move(self):
         if self.y - self.radius < 0:
@@ -34,16 +43,22 @@ class Boid:
         if self.y - self.radius > self.screen.height():
             self.dy *= -1
 
-    def separation(self,flock):
+    def get_nearby(self,neighbors):
         min_distance = self.radius*5
+        self.nearby = []
+        for boid in neighbors:
+            dist = self.distance(boid)
+            if dist > 0 and dist < min_distance:
+                self.nearby.append(boid)
+
+    def separation(self):
         avoid_factor = 0.05
         distance_x = 0
         distance_y = 0
-        for boid in flock:
+        for boid in self.nearby:
             dist = self.distance(boid)
-            if dist > 0 and dist < min_distance:
-                distance_x += (self.x - boid.x)/dist
-                distance_y += (self.y - boid.y)/dist
+            distance_x += (self.x - boid.x)/dist
+            distance_y += (self.y - boid.y)/dist
         self.dx += distance_x * avoid_factor
         self.dy += distance_y * avoid_factor
 
@@ -53,8 +68,40 @@ class Boid:
         abs_v = ((diff_x)**2+(diff_y)**2)**(1/2)
         return abs_v
 
-    def speedlimit ():
-        pass
+    def speedlimit (self):
+        if self.dy >= self.maxspeed:
+            self.dy = self.maxspeed
+        if self.dy <= -self.maxspeed:
+            self.dy = -self.maxspeed
+        if self.dx >= self.maxspeed:
+            self.dx = self.maxspeed
+        if self.dx <= -self.maxspeed:
+            self.dx = -self.maxspeed
+
+
+class BoidGrid:
+    def __init__(self):
+        self.grid_size = 100
+        self.dict = {}
+    def get_cell(self,x,y):
+        return (x//self.grid_size, y//self.grid_size)
+    def add(self, boid, cell):
+        if cell in self.dict:
+            self.dict[cell].append(boid)
+        else:
+            self.dict[cell] = [boid]
+    def remove(self, boid, cell):
+        if cell in self.dict and boid in self.dict[cell]:
+            self.dict[cell].remove(boid)
+    def get_local_neighborhood(self, boid, cell):
+        nearby = []
+        if cell in self.dict:
+            for x in (-1,0,1):
+                for y in (-1,0,1):
+                    nearby += self.dict.get((cell[0]+x, cell[1]+y),[])
+            nearby.remove(boid)
+        return nearby
+
 class BoidWidget(QWidget):
     BoidMoved = pyqtSignal(Boid)
 
@@ -62,13 +109,14 @@ class BoidWidget(QWidget):
         super().__init__(parent)
         self.screen = QApplication.primaryScreen().availableGeometry()
         self.Boids = []
+        self.grid = BoidGrid()
         colors = [Qt.red, Qt.blue, Qt.green, Qt.yellow, Qt.magenta, Qt.cyan]
-        for i in range(20):
+        for i in range(100):
             radius = 10
             x = random.randint(radius, self.screen.width())
             y = random.randint(radius, self.screen.height())
             color = random.choice(colors)
-            individual = Boid(x, y, radius, color)
+            individual = Boid(self.grid, x, y, radius, color)
             self.Boids.append(individual)
 
         self.timer = QTimer(self)
@@ -83,22 +131,21 @@ class BoidWidget(QWidget):
         for Boid in self.Boids:
             #qp.drawPixmap(QRect(Boid.x,Boid.y,100,50), pixmap)
             qp.setBrush(QColor(Boid.color))
-            qp.drawEllipse(Boid.x - Boid.radius, self.height() - Boid.y - Boid.radius, 2 * Boid.radius, 2 * Boid.radius)
+            qp.drawEllipse(int(Boid.x - Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
 
     def updateBoids(self):
         for Boid in self.Boids:
-            Boid.move(self.Boids)
-            self.BoidMoved.emit(Boid)
+            Boid.move()
+        self.BoidMoved.emit(Boid)
 
 class BoidThread(QThread):
-    def __init__(self, Boid, Flock, parent=None):
+    def __init__(self, Boid, parent=None):
         super().__init__(parent)
         self.Boid = Boid
-        self.Flock = Flock
 
     def run(self):
         while True:
-            self.Boid.move(self.Flock)
+            self.Boid.move()
             self.usleep(10)
 
 class MainWindow(QWidget):
@@ -111,10 +158,10 @@ class MainWindow(QWidget):
         layout.addWidget(self.BoidWidget)
 
         for Boid in self.BoidWidget.Boids:
-            thread = BoidThread(Boid, self.BoidWidget.Boids,  self)
+            thread = BoidThread(Boid,  self)
             thread.start()
 
-    def onBoidMoved(self, Boid):
+    def onBoidMoved(self):
         self.BoidWidget.update()
 
     def keyPressEvent(self, event):
