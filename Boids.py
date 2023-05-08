@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal, QLineF
 from PyQt5.QtGui import QPainter, QColor, QKeyEvent
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout
 
@@ -25,6 +25,7 @@ class Boid:
         self.cohese_factor = 0.005
         self.separate_factor = 0.05
         self.align_factor = 0.05
+        self.history = [[self.x,self.y]]
 
 
 
@@ -41,6 +42,9 @@ class Boid:
         self.x += self.dx
         self.update_cell()
         #self.update_color()
+        self.history.append ([self.x,self.y])
+        if len(self.history) > 25:
+            self.history = self.history[1:]
 
     def noise(self):
         self.dx +=  random.uniform(-self.maxspeed,self.maxspeed) / 50
@@ -182,7 +186,8 @@ class BoidWidget(QWidget):
         self.grid = BoidGrid()
         colors = [Qt.blue] #, Qt.red, Qt.yellow, Qt.green, Qt.magenta, Qt.cyan, Qt.black]
         margin = 100
-        for i in range(50):
+        self.boid_history = []
+        for i in range(100):
             radius = 5
             x = random.randint(margin, self.screen.width()-margin)
             y = random.randint(margin, self.screen.height()-margin)
@@ -200,13 +205,22 @@ class BoidWidget(QWidget):
         #pixmap = QPixmap("D:\\OneDrive - Thermo Fisher Scientific\\Documents\\Phd_teach\\Boids\\fish.gif")
         
         for Boid in self.Boids:
-            #qp.drawPixmap(QRect(Boid.x,Boid.y,100,50), pixmap)
+            #qp.drawPixmap(QRect(Boid.x,Boid.y,100,50), pixmap)    
             qp.setBrush(QColor(Boid.color))
-            qp.drawEllipse(int(Boid.x - Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
+            qp.drawEllipse(int(Boid.x-Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
+            for i in range(len(Boid.history)-1):
+                qp.setPen(QColor(0,0,255,100))
+                line = QLineF(int(Boid.history[i][0]),int(self.height()-Boid.history[i][1]),
+                             int(Boid.history[i+1][0]), int(self.height()-Boid.history[i+1][1]))
+                qp.drawLine(line)
+            
+            
 
     def updateBoids(self):
+        paused = window.paused
         for Boid in self.Boids:
-            Boid.move()
+            if not paused:
+                Boid.move()
         self.BoidMoved.emit(Boid)
 
 class BoidThread(QThread):
@@ -227,6 +241,7 @@ class MainWindow(QWidget):
         self.BoidWidget.BoidMoved.connect(self.onBoidMoved)
         layout = QVBoxLayout(self)
         layout.addWidget(self.BoidWidget)
+        self.paused = 0
 
         for Boid in self.BoidWidget.Boids:
             Boid.move()
@@ -238,8 +253,15 @@ class MainWindow(QWidget):
 
     def keyPressEvent(self, event):
         if type(event) == QKeyEvent:
+            if event.key() == Qt.Key_Escape:
                 sys.exit(0)
-
+        if type(event) == QKeyEvent:
+            if event.key() == Qt.Key_Space:
+                if self.paused == 0:
+                    self.paused = 1
+                else:
+                    self.paused = 0
+                
 if __name__ == '__main__':
     import sys
 
