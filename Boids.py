@@ -5,44 +5,46 @@ from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout
 import random
 
 class Boid:
-    def __init__(self, grid, x, y, radius, color):
+    def __init__(self, grid, x, y, radius, color, margin):
         self.x = x
         self.y = y
         self.radius = radius
         self.color = color
-        self.r = QColor(color).red()
-        self.g = QColor(color).green()
-        self.b = QColor(color).blue()
-        self.maxspeed = 2
-        self.dy = random.choice([-self.maxspeed,self.maxspeed])
-        self.dx = random.choice([-self.maxspeed,self.maxspeed])
+        self.margin = margin
+        self.maxspeed = 5
+        self.dy = random.uniform(-self.maxspeed,self.maxspeed)
+        self.dx = random.uniform(-self.maxspeed,self.maxspeed)
         self.screen = QApplication.primaryScreen().availableGeometry()
         self.grid = grid
         self.grid_pos = grid.get_cell(self.x,self.y)
         self.grid.add(self,self.grid_pos)
         self.neighbors = []
-        self.separate_radius = 10 * self.radius
-        self.align_radius = 2 * self.separate_radius
+        self.separate_radius = 3 * self.radius
+        self.align_radius = 10 * self.radius
         self.cohese_radius = self.align_radius
+        self.cohese_factor = 0.005
+        self.separate_factor = 0.05
+        self.align_factor = 0.05
+
 
 
     def move(self):
         self.neighbors = self.grid.get_local_neighborhood(self,self.grid_pos)
         self.get_nearby()
-        self.alignment()
+        self.cohesion()
         self.separation()
-        self.noise()
-        self.cohesion()      
+        self.alignment()
+        self.noise()   
+        self.speedlimit() 
         self.bound_move()
-        self.speedlimit()
         self.y += self.dy
         self.x += self.dx
         self.update_cell()
         #self.update_color()
 
     def noise(self):
-        self.dx +=  random.randint(-self.maxspeed//10,self.maxspeed//10)
-        self.dy +=  random.randint(-self.maxspeed//10,self.maxspeed//10)
+        self.dx +=  random.uniform(-self.maxspeed,self.maxspeed) / 50
+        self.dy +=  random.uniform(-self.maxspeed,self.maxspeed) / 50
 
     def distance(self,boid):
         diff_x = self.x-boid.x
@@ -63,36 +65,35 @@ class Boid:
         distance_y = 0
         for boid in self.neighbors:
             dist = self.distance(boid)
-            if dist > 0:
-                distance_x += (self.x - boid.x) / dist
-                distance_y += (self.y - boid.y) / dist
-        self.dx += distance_x
-        self.dy += distance_y
+            if dist < self.separate_radius:
+                distance_x += (self.x - boid.x)
+                distance_y += (self.y - boid.y)
+        self.dx += distance_x * self.separate_factor
+        self.dy += distance_y * self.separate_factor
 
     def alignment(self):
         avg_dx, avg_dy = [0,0]
         count = 0
         for boid in self.neighbors:
             dist = self.distance(boid)
-            if dist > 0:
-                avg_dx += boid.dx / dist
-                avg_dy += boid.dy / dist
+            if dist > 0 and dist < self.align_radius:
+                avg_dx += boid.dx
+                avg_dy += boid.dy
                 count += 1
             
         if count > 0:
             avg_dx /= count
             avg_dy /= count
-            self.dx += (avg_dx - self.dx)
-            self.dy += (avg_dy - self.dy)
+            self.dx += (avg_dx - self.dx) * self.align_factor
+            self.dy += (avg_dy - self.dy) * self.align_factor
 
     def cohesion(self):
-        cohese_factor = 0.05
         centroid = [0,0]
         count = 0
         x_dir, y_dir = [0,0]
         for boid in self.neighbors:
             dist = self.distance(boid)
-            if dist > 0:
+            if dist > 0 and dist > self.cohese_radius:
                 centroid[0] += boid.x
                 centroid[1] += boid.y
                 count += 1
@@ -103,19 +104,19 @@ class Boid:
             x_dir = centroid[0] - self.x
             y_dir = centroid[1] - self.y
 
-        self.dx += x_dir * cohese_factor
-        self.dy += y_dir    * cohese_factor
+            self.dx += x_dir * self.cohese_factor
+            self.dy += y_dir * self.cohese_factor
 
     def bound_move(self):
-        if self.y - self.radius < 0:
-            self.y = self.screen.height()
-        if self.x - self.radius < 0:
-            self.x = self.screen.width()
-        #idk why 5*radius seems to be reading full screen width value somewhat wrong
-        if self.x > self.screen.width():
-            self.x = 5
-        if self.y - self.radius > self.screen.height():
-            self.y = 5
+        turn_factor = 1
+        if self.y - self.margin < 0:
+            self.dy += turn_factor
+        if self.x - self.margin < 0:
+            self.dx += turn_factor
+        if self.x > self.screen.width() - self.margin:
+            self.dx -= turn_factor
+        if self.y > self.screen.height() - self.margin:
+            self.dy -= turn_factor
 
     def speedlimit (self):
         if self.dy >= self.maxspeed:
@@ -136,18 +137,17 @@ class Boid:
 
     def update_color(self):
         count = 0
-        sum_r = 0
-        sum_g = 0
-        sum_b = 0
+        sum_color = {}
         for boid in self.nearby:
-            sum_r += boid.r
-            sum_g += boid.g
-            sum_b += boid.b
-            count += 1
-        if count > 0:
-            self.r = sum_r//count
-            self.g = sum_g//count
-            self.b = sum_b//count
+            dist = self.distance(boid)
+            if dist > 0 and dist > self.cohese_radius/2:
+                if boid.color in sum_color:
+                    sum_color[boid.color] += 1
+                else:
+                    sum_color[boid.color] = 1
+                count += 1
+            if count > 0:
+                self.color = max(sum_color)
 
 class BoidGrid:
     def __init__(self):
@@ -180,13 +180,14 @@ class BoidWidget(QWidget):
         self.screen = QApplication.primaryScreen().availableGeometry()
         self.Boids = []
         self.grid = BoidGrid()
-        colors = [Qt.red, Qt.blue, Qt.green, Qt.yellow, Qt.magenta, Qt.cyan]
-        for i in range(100):
-            radius = 10
-            x = random.randint(radius, self.screen.width())
-            y = random.randint(radius, self.screen.height())
+        colors = [Qt.blue] #, Qt.red, Qt.yellow, Qt.green, Qt.magenta, Qt.cyan, Qt.black]
+        margin = 100
+        for i in range(50):
+            radius = 5
+            x = random.randint(margin, self.screen.width()-margin)
+            y = random.randint(margin, self.screen.height()-margin)
             color = random.choice(colors)
-            individual = Boid(self.grid, x, y, radius, color)
+            individual = Boid(self.grid, x, y, radius, color, margin)
             self.Boids.append(individual)
 
         self.timer = QTimer(self)
@@ -200,7 +201,7 @@ class BoidWidget(QWidget):
         
         for Boid in self.Boids:
             #qp.drawPixmap(QRect(Boid.x,Boid.y,100,50), pixmap)
-            qp.setBrush(QColor(Boid.r , Boid.g, Boid.b))
+            qp.setBrush(QColor(Boid.color))
             qp.drawEllipse(int(Boid.x - Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
 
     def updateBoids(self):
