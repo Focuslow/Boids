@@ -1,5 +1,6 @@
+from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QLineF, QSize
-from PyQt5.QtGui import QPainter, QColor, QKeyEvent, QPaintEvent
+from PyQt5.QtGui import QPainter, QColor, QKeyEvent, QMouseEvent, QCursor
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton
 
 import random
@@ -159,12 +160,19 @@ class MainWindow(QWidget):
         if type(event) == QKeyEvent:
             if event.key() == Qt.Key_Escape:
                 sys.exit(0)
-        elif type(event) == QKeyEvent:
             if event.key() == Qt.Key_Space:
                 if self.paused == 0:
                     self.paused = 1
                 else:
                     self.paused = 0
+    
+    def mousePressEvent(self, event):
+        max_y = self.BoidWidget.screen.height()
+        if type(event) == QMouseEvent:
+            if event.button() == Qt.LeftButton:
+                self.BoidWidget.add_boid(event.x() - 2*self.BoidWidget.radius, max_y - event.y() + 6*self.BoidWidget.radius)
+            if event.button() == Qt.RightButton:
+                self.BoidWidget.add_avoid(QCursor.pos().x() - 2*self.BoidWidget.radius, max_y - QCursor.pos().y() + 6*self.BoidWidget.radius)
 
 class Boid:
     def __init__(self, grid, x, y, radius, color, size, margin):
@@ -235,6 +243,9 @@ class Boid:
             if dist < self.separate_radius:
                 distance_x += (self.x - boid.x)
                 distance_y += (self.y - boid.y)
+            if isinstance(boid,Avoid):
+                distance_x *= 1.01
+                distance_y *= 1.01
         self.dx += distance_x * self.separate_factor
         self.dy += distance_y * self.separate_factor
 
@@ -259,11 +270,14 @@ class Boid:
         count = 0
         x_dir, y_dir = [0,0]
         for boid in self.neighbors:
-            dist = self.distance(boid)
-            if dist > 0 and dist > self.view_radius:
-                centroid[0] += boid.x
-                centroid[1] += boid.y
-                count += 1
+            if isinstance(boid,Avoid):
+                continue
+            else:
+                dist = self.distance(boid)
+                if dist > 0 and dist > self.view_radius:
+                    centroid[0] += boid.x
+                    centroid[1] += boid.y
+                    count += 1
         if count > 0:
             centroid[0] = centroid[0] / count
             centroid[1] = centroid[1] / count
@@ -316,6 +330,17 @@ class Boid:
             if count > 0:
                 self.color = max(sum_color)
 
+class Avoid(Boid):
+    def __init__(self, grid, x, y, radius, color, size, margin):
+        super().__init__(grid, x, y, radius, color, size, margin)
+        self.grid = grid
+        self.grid_pos = grid.get_cell(x,y)
+        self.grid.add(self,self.grid_pos)
+        self.neighbors = []
+    
+    def move(self,view,sep,coh,align):
+        pass        
+
 class BoidGrid:
     def __init__(self):
         self.grid_size = 100
@@ -353,7 +378,9 @@ class BoidWidget(QWidget):
         self.colors = [Qt.blue] #, Qt.red, Qt.yellow, Qt.green, Qt.magenta, Qt.cyan, Qt.black]
         self.margin = 100
         self.num_boids = 100
+        self.num_avoids = 10
         self.boid_history = []
+        self.radius = 5
         self.screen = QApplication.primaryScreen().availableGeometry()
         #smaller widget to accomodate control panel on the side
         self.setMinimumSize(QSize(self.screen.width() - 120 ,self.screen.height()))
@@ -387,12 +414,23 @@ class BoidWidget(QWidget):
     def init_boids(self):
         self.grid = BoidGrid()
         for i in range(self.num_boids):
-            radius = 5
             x = random.randint(self.margin, self.width()-self.margin)
             y = random.randint(self.margin, self.height()-self.margin)
-            color = random.choice(self.colors)
-            individual = Boid(self.grid, x, y, radius, color, self.size(), self.margin)
-            self.Boids.append(individual)
+            self.add_boid(x,y)
+        for i in range(self.num_avoids):
+            x = random.randint(self.margin, self.width()-self.margin)
+            y = random.randint(self.margin, self.height()-self.margin)
+            self.add_avoid(x,y)
+
+    def add_boid(self,x,y):
+        color = Qt.blue
+        individual = Boid(self.grid, x, y, self.radius, color, self.size(), self.margin)
+        self.Boids.append(individual)
+
+    def add_avoid(self,x,y):
+        color = Qt.red
+        individual = Avoid(self.grid, x, y, self.radius, color, self.size(), self.margin)
+        self.Boids.append(individual)
 
 if __name__ == '__main__':
     import sys
