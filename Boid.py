@@ -1,4 +1,5 @@
 import random
+import math
 
 class Boid:
     def __init__(self, grid, x, y, radius, color, size, margin):
@@ -20,6 +21,7 @@ class Boid:
         self.cohese_factor = 0.005
         self.separate_factor = 0.05
         self.align_factor = 0.05
+        self.collision_factor = 0.1
         self.history = [[self.x,self.y]]
 
     def move(self, view, sep, coh, align):
@@ -32,7 +34,8 @@ class Boid:
         self.cohesion()
         self.separation()
         self.alignment()
-        self.noise()   
+        self.noise()
+        self.avoid_collision() 
         self.speed_limit() 
         self.bound_move()
         self.y += self.dy
@@ -53,6 +56,19 @@ class Boid:
         abs_v = ((diff_x)**2+(diff_y)**2)**(1/2)
         return abs_v
 
+    def collision_angle(self,boid):
+        heading_now = [self.dx, self.dy]
+        scale_now = (heading_now[0]**2 + heading_now[1]**2)**(1/2)
+
+        heading_collision = [boid.x-self.x, boid.y-self.y]
+        scale_collision = (heading_collision[0]**2 + heading_collision[1]**2)**(1/2)
+
+        scalar_prod = heading_collision[0]*heading_now[0] + heading_collision[1]*heading_now[1]
+        cos_angle = scalar_prod / (scale_collision*scale_now)
+        rad_angle = math.acos(cos_angle)
+        angle = math.degrees(rad_angle)
+        return angle
+        
     def get_nearby(self):
         min_distance = self.radius*50
         self.nearby = []
@@ -155,6 +171,18 @@ class Boid:
                 count += 1
             if count > 0:
                 self.color = max(sum_color)
+
+    def avoid_collision(self):
+        for boid in self.neighbors:
+            if isinstance(boid,Avoid):
+                dist = self.distance(boid)
+                if dist < self.view_radius:
+                    angle = self.collision_angle(boid)
+                    if abs(angle) < 30:
+                        normal_vect = [self.dy, -self.dx]
+                        self.dx += normal_vect[0] * self.collision_factor * 1/angle**2 * 1/dist**4
+                        self.dy += normal_vect[1] * self.collision_factor * 1/angle**2 * 1/dist**4
+
 
 class Avoid(Boid):
     def __init__(self, grid, x, y, radius, color, size, margin):

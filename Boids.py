@@ -1,7 +1,7 @@
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QLineF, QSize
 from PyQt5.QtGui import QPainter, QColor, QKeyEvent, QMouseEvent, QCursor
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton, QCheckBox
 from Boid import Boid, Avoid
 from BoidGrid import BoidGrid
 import random
@@ -11,6 +11,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.paused = 0
+        self.tracers_only_enabled = 0
         self.main = QHBoxLayout(self)
         self.controls_menu = QVBoxLayout(self)
         self.controls()
@@ -22,6 +23,7 @@ class MainWindow(QWidget):
         self.slider_sep.valueChanged.connect(self.on_boid_moved)
         self.pause_btn.clicked.connect(self.pause_action)
         self.reset_btn.clicked.connect(self.reset_boids)
+        self.tracers_btn.clicked.connect(self.tracers_only)
         
         self.main.addWidget(self.BoidWidget)
         self.main.addLayout(self.controls_menu)
@@ -46,6 +48,12 @@ class MainWindow(QWidget):
         self.reset_btn.show()
         self.reset_btn.setStyleSheet("background-color: white;")
         self.controls_menu.addWidget(self.reset_btn)
+
+        self.tracers_btn = QPushButton(self)
+        self.tracers_btn.setText("Hide Boids")
+        self.tracers_btn.show()
+        self.tracers_btn.setStyleSheet("background-color: white;")
+        self.controls_menu.addWidget(self.tracers_btn)
         
         #distance of alignment and cohesion
         self.view_menu = QVBoxLayout(self)
@@ -84,7 +92,7 @@ class MainWindow(QWidget):
         self.slider_sep = QSlider(Qt.Horizontal, self)
         self.slider_sep.setFixedWidth(100)
         self.slider_sep.show()
-        self.slider_sep.setValue(50)
+        self.slider_sep.setValue(80)
         self.slider_sep.setMinimum(0)
         self.slider_sep.setMaximum(100)
         self.sep_menu.addWidget(self.slider_sep)
@@ -105,7 +113,7 @@ class MainWindow(QWidget):
         self.slider_coh = QSlider(Qt.Horizontal, self)
         self.slider_coh.setFixedWidth(100)
         self.slider_coh.show()
-        self.slider_coh.setValue(50)
+        self.slider_coh.setValue(20)
         self.slider_coh.setMinimum(0)
         self.slider_coh.setMaximum(100)
         self.coh_menu.addWidget(self.slider_coh)
@@ -129,7 +137,7 @@ class MainWindow(QWidget):
         self.slider_align.setValue(50)
         self.slider_align.setMinimum(0)
         self.slider_align.setMaximum(100)
-        self.align_menu.addWidget(self.slider_align)
+        self.align_menu.addWidget(self.slider_align)        
 
         self.view = self.slider_view.value()
         self.sep = self.slider_sep.value()
@@ -157,6 +165,14 @@ class MainWindow(QWidget):
             del self.BoidWidget.Boids[0]
         del self.BoidWidget.grid
         self.BoidWidget.init_boids()
+
+    def tracers_only(self):
+        if self.tracers_only_enabled:
+            self.tracers_only_enabled = 0
+            self.tracers_btn.setText("Show Boids")
+        else:
+            self.tracers_only_enabled = 1
+            self.tracers_btn.setText("Hide Boids")
 
     def keyPressEvent(self, event):
         if type(event) == QKeyEvent:
@@ -205,7 +221,11 @@ class BoidWidget(QWidget):
         for Boid in self.Boids:
             #qp.drawPixmap(QRect(Boid.x,Boid.y,100,50), pixmap)    
             qp.setBrush(QColor(Boid.color))
-            qp.drawEllipse(int(Boid.x-Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
+            if not window.tracers_only_enabled:
+                qp.drawEllipse(int(Boid.x-Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
+            else:
+                if isinstance(Boid,Avoid):
+                    qp.drawEllipse(int(Boid.x-Boid.radius), int(self.height() - Boid.y - Boid.radius), 2 * Boid.radius, 2 * Boid.radius)
             for i in range(len(Boid.history)-1):
                 qp.setPen(QColor(0,0,255,100))
                 line = QLineF(int(Boid.history[i][0]),int(self.height()-Boid.history[i][1]),
