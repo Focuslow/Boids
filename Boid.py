@@ -180,8 +180,8 @@ class Boid:
                     angle = self.collision_angle(boid)
                     if abs(angle) < 30:
                         normal_vect = [self.dy, -self.dx]
-                        self.dx += normal_vect[0] * self.collision_factor * 1/angle**2 * 1/dist**4
-                        self.dy += normal_vect[1] * self.collision_factor * 1/angle**2 * 1/dist**4
+                        self.dx += normal_vect[0] * self.collision_factor * 1/angle**(1/2) * 1/dist**(1/2)
+                        self.dy += normal_vect[1] * self.collision_factor * 1/angle**(1/2) * 1/dist**(1/2)
 
 
 class Avoid(Boid):
